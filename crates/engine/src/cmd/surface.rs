@@ -1,10 +1,9 @@
-//! Surface commands: Patch, Stitch, Thicken and Trim (surface bodies and turning them into
-//! solids), and the planned surface toolset (`planned!`: registered, not built yet).
+//! Surface commands: Patch, Stitch, Thicken, Trim, and the rest of the surface toolset.
 
 use serde_json::Value;
 use solidcraft_doc::{
     BlendSide, EdgeContinuity, Expr, ExtendMode, ExtendTo, FaceAt, FeatureKind, PatchContinuity, PlaneRef, ProfileSel, RuledCorners, RuledMode,
-    TrimCurves, expr::Kind,
+    SurfaceFilletTrim, TrimCurves, expr::Kind,
 };
 use solidcraft_doc::{BodyName, SketchId};
 use solidcraft_doc::{Dir, FacePick, Position};
@@ -80,10 +79,10 @@ pub static COMMANDS: &[CommandSpec] = &[
         .at("SURFACE", "MODIFY")
         .icon("surface_fair")
         .params("body: surface name; faces?: [[x,y,z]] points on the faces to fair (default: every face); strength?: number (0..1 of the full fairing step, default 1); iterations?: number (1..1000 steps, default 1); keep_edges?: bool (default true: hold the boundary row and the row next to it, so a face keeps meeting its neighbours in position and in tangent); tolerance?: expr mm (how far a control vertex may move, default 0.001 of the body's size). Moves the interior control vertices of each B-spline face to flatten its curvature variation while the boundary stays put: the face keeps its edges and the body its shape within the tolerance, and the warning in the reply carries the energy before and after; name?"),
-    planned!("surface.fillet", "Surface Fillet", "769")
+    CommandSpec::new("surface.fillet", "Surface Fillet", fillet)
         .at("SURFACE", "MODIFY")
         .icon("surface_fillet")
-        .params("planned: a, b: {body, point} (two faces of separate bodies that meet or cross; the points pick the side the ball rolls on); radius: expr; trim?: both|first|none"),
+        .params("a, b: {body, point} (two faces of separate bodies that meet or cross; the points pick the side the ball rolls on); radius: expr; trim?: both|first|none (default both: trim both and sew them to the blend; first: trim only the first and keep its name; none: the blend alone). A plane against a plane, or a plane against a cylinder whose axis is parallel or square to the plane; name?, body_name?"),
 ];
 
 fn patch(s: &mut Session, p: &Value) -> Result<Value> {
@@ -742,6 +741,37 @@ fn fair(s: &mut Session, p: &Value) -> Result<Value> {
     add_feature(s, p, kind)
 }
 
+/// A face of a body, picked by a point that also chooses the fillet's side.
+fn fillet_face(s: &Session, p: &Value, cmd: &str, key: &str) -> Result<FaceAt> {
+    let side = p.get(key).ok_or_else(|| bad(cmd, format!("`{key}` must be {{body, point}}")))?;
+    let body = side.get("body").and_then(Value::as_str).ok_or_else(|| bad(cmd, format!("`{key}.body` must name a body")))?.to_string();
+    if s.model.state().body(&body).is_none() {
+        return Err(bad(cmd, format!("no body `{body}`")));
+    }
+    let point = side.get("point").and_then(vec3).ok_or_else(|| bad(cmd, format!("`{key}.point` must be [x, y, z] on the face")))?;
+    Ok(FaceAt { body: BodyName(body), point: Position(point) })
+}
+
+/// `surface.fillet`: a rolling ball between two faces of separate bodies.
+fn fillet(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "surface.fillet";
+    let a = fillet_face(s, p, cmd, "a")?;
+    let b = fillet_face(s, p, cmd, "b")?;
+    if a.body == b.body {
+        return Err(bad(cmd, "a fillet needs two separate bodies"));
+    }
+    let radius = expr(p, "radius").ok_or_else(|| bad(cmd, "`radius` must be a number or an expression"))?;
+    check_expr(s, radius.as_str(), Kind::Length, cmd, "radius")?;
+    let trim = match p.get("trim").and_then(Value::as_str) {
+        None => SurfaceFilletTrim::Both,
+        Some(w) if w.eq_ignore_ascii_case("both") => SurfaceFilletTrim::Both,
+        Some(w) if w.eq_ignore_ascii_case("first") => SurfaceFilletTrim::First,
+        Some(w) if w.eq_ignore_ascii_case("none") => SurfaceFilletTrim::None,
+        Some(_) => return Err(bad(cmd, "`trim` must be both, first or none")),
+    };
+    add_feature(s, p, FeatureKind::SurfaceFillet { a, b, radius, trim })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1357,14 +1387,64 @@ mod tests {
         assert_eq!(s.doc.features.len(), before);
     }
 
-    /// The planned surface commands are registered but refuse to run: disabled with the
-    /// issue that tracks them, an error (never a panic) from every caller, and the design left
-    /// as it was.
+    /// Two perpendicular sheets: the blend is a quarter cylinder of the given radius, and a
+    /// refusal (the same body twice, or planes a ball cannot touch) leaves the design as it was.
+    #[test]
+    fn surface_fillet_of_two_sheets_is_a_quarter_cylinder() {
+        let mut s = Session::default();
+        let spec = crate::find_command("surface.fillet").expect("surface.fillet");
+        assert!(spec.info(&s).enabled, "surface.fillet is built");
+        run(&mut s, "sketch.create", json!({"plane": "XY", "name": "FloorSk"}));
+        run(&mut s, "sketch.rectangle.two_point", json!({"p0": [0, 0], "p1": [40, 20]}));
+        run(&mut s, "sketch.finish", json!({}));
+        run(&mut s, "surface.patch", json!({"sketch": "FloorSk", "body_name": "Floor"}));
+        run(&mut s, "sketch.create", json!({"plane": "XZ", "name": "WallSk"}));
+        // XZ sketch y is −Z, so y = −20 is world z = +20.
+        run(&mut s, "sketch.rectangle.two_point", json!({"p0": [0, 0], "p1": [40, -20]}));
+        run(&mut s, "sketch.finish", json!({}));
+        run(&mut s, "surface.patch", json!({"sketch": "WallSk", "body_name": "Wall"}));
+        let before = s.doc.features.len();
+        assert!(
+            s.execute(
+                "surface.fillet",
+                &json!({"a": {"body": "Floor", "point": [20, 10, 0]}, "b": {"body": "Floor", "point": [20, 10, 0]}, "radius": 5})
+            )
+            .is_err()
+        );
+        assert_eq!(s.doc.features.len(), before, "the same body twice changed the design");
+        run(&mut s, "construct.plane.offset", json!({"base": "XY", "offset": 8, "name": "HighPlane"}));
+        run(&mut s, "sketch.create", json!({"plane": "HighPlane", "name": "High"}));
+        run(&mut s, "sketch.rectangle.two_point", json!({"p0": [0, 0], "p1": [20, 20]}));
+        run(&mut s, "sketch.finish", json!({}));
+        run(&mut s, "surface.patch", json!({"sketch": "High", "body_name": "High"}));
+        let before = s.doc.features.len();
+        let refused = s.execute(
+            "surface.fillet",
+            &json!({"a": {"body": "Floor", "point": [10, 10, 0]}, "b": {"body": "High", "point": [10, 10, 8]}, "radius": 2, "trim": "none"}),
+        );
+        assert!(refused.is_err(), "{refused:?}");
+        assert_eq!(s.doc.features.len(), before, "a refused fillet stayed in the timeline");
+        run(
+            &mut s,
+            "surface.fillet",
+            json!({"a": {"body": "Floor", "point": [20, 10, 0]}, "b": {"body": "Wall", "point": [20, 0, 10]}, "radius": 5, "trim": "none", "body_name": "Blend"}),
+        );
+        let want = 5.0 * std::f64::consts::PI / 2.0 * 40.0;
+        assert!((area(&s, "Blend") - want).abs() < want * 1e-3, "{} vs {want}", area(&s, "Blend"));
+        assert!(s.world_state().body("Floor").is_some() && s.world_state().body("Wall").is_some());
+        run(&mut s, "edit.undo", json!({}));
+        assert!(s.world_state().body("Blend").is_none());
+    }
+
+    /// A surface command that is still only registered must refuse and leave the design alone.
+    /// `surface.fillet` is built; the quarter-cylinder test covers it. The list stays so the
+    /// next planned command is held to the same refusal.
     #[test]
     fn planned_commands_refuse_and_leave_the_design_alone() {
-        let planned = ["surface.fillet"];
+        let planned: [&str; 0] = [];
         let mut s = Session::default();
         run(&mut s, "solid.box", json!({"length": 10, "width": 10, "height": 10, "body_name": "B"}));
+        assert!(crate::find_command("surface.fillet").expect("surface.fillet").info(&s).enabled);
         let before = s.doc.features.len();
         for id in planned {
             let spec = crate::find_command(id).unwrap_or_else(|| panic!("{id} is not registered"));

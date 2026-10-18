@@ -348,6 +348,10 @@ surface_fair
   inputs:
     Tolerance = sfair.tolerance (Length)
   expressions: sfair.tolerance
+surface_fillet
+  inputs:
+    Radius = sfillet.radius (Length)
+  expressions: sfillet.radius
 unstitch
 reverse_normal
 surface_untrim
