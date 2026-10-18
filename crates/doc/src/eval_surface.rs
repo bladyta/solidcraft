@@ -503,6 +503,42 @@ pub(super) fn eval(doc: &Document, vals: &BTreeMap<String, Value>, f: &Feature, 
             }
             Ok(())
         }
+        FeatureKind::SurfaceFillet { a, b, radius, trim } => {
+            if a.body == b.body {
+                return Err(DocError::Invalid("a fillet needs two separate bodies".into()));
+            }
+            let ia = st.bodies.iter().position(|x| x.name == a.body.as_ref()).ok_or_else(|| DocError::Unknown(format!("body `{}`", a.body)))?;
+            let ib = st.bodies.iter().position(|x| x.name == b.body.as_ref()).ok_or_else(|| DocError::Unknown(format!("body `{}`", b.body)))?;
+            let ba = st.bodies.get(ia).cloned().ok_or_else(|| DocError::Invalid("body".into()))?;
+            let bb = st.bodies.get(ib).cloned().ok_or_else(|| DocError::Invalid("body".into()))?;
+            let r = val(vals, radius, Kind::Length)?;
+            let mode = match trim {
+                crate::SurfaceFilletTrim::Both => kernel::SurfaceFilletTrim::Both,
+                crate::SurfaceFilletTrim::First => kernel::SurfaceFilletTrim::First,
+                crate::SurfaceFilletTrim::None => kernel::SurfaceFilletTrim::None,
+            };
+            let made = kernel::surface_fillet(&ba.body, a.point.0, &bb.body, b.point.0, r, mode)?;
+            match trim {
+                crate::SurfaceFilletTrim::Both => {
+                    let gone = [a.body.0.clone(), b.body.0.clone()];
+                    st.bodies.retain(|x| !gone.contains(&x.name));
+                    let name = new_name(st, f, 0);
+                    st.bodies.push(ModelBody::new(name, made, f.id));
+                }
+                crate::SurfaceFilletTrim::First => {
+                    if let Some(slot) = st.bodies.iter_mut().find(|x| x.name == a.body.as_ref()) {
+                        let name = slot.name.clone();
+                        let feature = slot.feature;
+                        *slot = ModelBody::new(name, made, feature);
+                    }
+                }
+                crate::SurfaceFilletTrim::None => {
+                    let name = new_name(st, f, 0);
+                    st.bodies.push(ModelBody::new(name, made, f.id));
+                }
+            }
+            Ok(())
+        }
         _ => Err(DocError::Invalid("not a surface feature".into())),
     }
 }

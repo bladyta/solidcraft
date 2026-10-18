@@ -9,17 +9,6 @@ macro_rules! created_doc {
     };
 }
 
-/// A command that is designed and registered (id, toolbar place, icon, params doc) but not built
-/// yet. It is disabled with the reason, so the toolbar greys it and says why, and its `run`
-/// refuses too, however it is reached. `$issue` is the GitHub issue that tracks building it.
-macro_rules! planned {
-    ($id:literal, $label:literal, $issue:literal) => {
-        CommandSpec::new($id, $label, |_, _| Err(crate::EngineError::Other(concat!("not supported yet: ", $label, " (issue #", $issue, ")").into())))
-            .enabled(|_| Err(concat!("not supported yet (issue #", $issue, ")").into()))
-            .planned($issue)
-    };
-}
-
 mod bom;
 mod browser;
 pub(crate) mod clearance;
@@ -120,7 +109,7 @@ pub struct CommandSpec {
     /// Reads the evaluated model (the default). A command that reads only the document and the
     /// session's history runs on a model left stale by a live gesture without evaluating it first.
     pub reads_model: bool,
-    /// Registered but not built yet (see `planned!`): the GitHub issue number that tracks it.
+    /// Registered but not built yet: the GitHub issue number that tracks it.
     pub planned: Option<&'static str>,
     /// The command's typed parameter contract, which carries its input schema; `None` until
     /// the command is converted (see `crate::schema`).

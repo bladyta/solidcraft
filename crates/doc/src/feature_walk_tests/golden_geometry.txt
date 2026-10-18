@@ -165,6 +165,9 @@ surface_match
 surface_fair
   moves: faces[0][0], faces[0][1], faces[0][2]
   face points: [0, 0, 0]
+surface_fillet
+  moves: a.point[0], a.point[1], a.point[2], b.point[0], b.point[1], b.point[2]
+  face points: [0, 0, 0], [0, 0, 0]
 unstitch
   moves: faces[0][0], faces[0][1], faces[0][2]
 reverse_normal
