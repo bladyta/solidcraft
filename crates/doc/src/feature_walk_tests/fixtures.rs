@@ -170,6 +170,7 @@ pub(super) fn fixtures() -> Vec<(&'static str, Value)> {
         ),
         ("surface_match", json!({"type": "surface_match", "body": "B", "faces": [o], "target": "C", "edges": [o]})),
         ("surface_fair", json!({"type": "surface_fair", "body": "B", "faces": [o], "tolerance": "sfair.tolerance"})),
+        ("surface_fillet", json!({"type": "surface_fillet", "a": {"body": "B", "point": o}, "b": {"body": "C", "point": o}, "radius": "sfillet.radius"})),
         ("unstitch", json!({"type": "unstitch", "body": "B"})),
         ("reverse_normal", json!({"type": "reverse_normal", "body": "B"})),
         ("surface_untrim", json!({"type": "surface_untrim", "face": {"body": "B", "point": o}, "holes": [o], "outer": true})),

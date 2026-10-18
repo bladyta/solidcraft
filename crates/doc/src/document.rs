@@ -195,6 +195,25 @@ impl RuledCorners {
     }
 }
 
+/// Which bodies a surface fillet trims and sews to the blend (`surface.fillet`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SurfaceFilletTrim {
+    /// Both bodies are trimmed and sewn to the blend. One body comes back.
+    #[default]
+    Both,
+    /// Only the first body is trimmed and sewn to the blend. It keeps its name.
+    First,
+    /// The blend alone. Both bodies stay as they were.
+    None,
+}
+
+impl SurfaceFilletTrim {
+    fn is_both(&self) -> bool {
+        *self == SurfaceFilletTrim::Both
+    }
+}
+
 /// Angular starts in older designs used the raw axis sign. New revolves measure starts
 /// along the same sketch-normal sweep direction as the kernel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1511,6 +1530,19 @@ pub enum FeatureKind {
         #[walk(length = "Tolerance")]
         tolerance: Expr,
     },
+    /// A rolling-ball fillet of `radius` between the faces of two separate bodies at `a` and
+    /// `b` (`surface.fillet`). The points pick the side the ball rolls on. `trim` decides
+    /// whether those bodies are cut back to the contact and sewn to the blend.
+    SurfaceFillet {
+        #[walk(picks_faces)]
+        a: FaceAt,
+        #[walk(picks_faces)]
+        b: FaceAt,
+        #[walk(length = "Radius")]
+        radius: Expr,
+        #[serde(default, skip_serializing_if = "SurfaceFilletTrim::is_both")]
+        trim: SurfaceFilletTrim,
+    },
     /// A surface body trimmed by a plane, or by a face of a body (`tool`), keeping the side of
     /// `keep`.
     SurfaceTrim {
@@ -2132,6 +2164,7 @@ impl FeatureKind {
             FeatureKind::SurfaceBoundary { .. } | FeatureKind::SurfaceNetwork { .. } => "BoundaryFeature",
             FeatureKind::SurfaceMatch { .. } => "MatchFeature",
             FeatureKind::SurfaceFair { .. } => "FairFeature",
+            FeatureKind::SurfaceFillet { .. } => "SurfaceFilletFeature",
             FeatureKind::Stitch { .. } => "StitchFeature",
             FeatureKind::Thicken { .. } => "ThickenFeature",
             FeatureKind::SurfaceTrim { .. } => "TrimFeature",
@@ -2212,6 +2245,7 @@ impl FeatureKind {
             FeatureKind::SurfaceBoundary { .. } | FeatureKind::SurfaceNetwork { .. } => "Boundary",
             FeatureKind::SurfaceMatch { .. } => "Match",
             FeatureKind::SurfaceFair { .. } => "Fair",
+            FeatureKind::SurfaceFillet { .. } => "SurfaceFillet",
             FeatureKind::Stitch { .. } => "Stitch",
             FeatureKind::Thicken { .. } => "Thicken",
             FeatureKind::SurfaceTrim { .. } => "Trim",
