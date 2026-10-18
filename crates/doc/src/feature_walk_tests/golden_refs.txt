@@ -190,6 +190,8 @@ surface_match
   remap_bodies: body
 surface_fair
   remap_bodies: body
+surface_fillet
+  remap_bodies: a.body
 unstitch
   remap_bodies: body
 reverse_normal

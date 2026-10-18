@@ -4724,7 +4724,8 @@ fn eval_feature(doc: &Document, vals: &BTreeMap<String, Value>, f: &Feature, st:
         | FeatureKind::SurfaceFair { .. }
         | FeatureKind::SurfaceOffset { .. }
         | FeatureKind::SurfaceRuled { .. }
-        | FeatureKind::SurfaceUntrim { .. } => surface::eval(doc, vals, f, st, warning),
+        | FeatureKind::SurfaceUntrim { .. }
+        | FeatureKind::SurfaceFillet { .. } => surface::eval(doc, vals, f, st, warning),
         FeatureKind::Emboss { .. }
         | FeatureKind::Rib { .. }
         | FeatureKind::ReplaceFace { .. }
