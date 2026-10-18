@@ -63,7 +63,13 @@ impl ApiBackend {
         // The same MCP server an ACP agent would get.
         let mcp = match &ctx.bridge {
             Some(b) => {
-                let argv = vec![b.cli.to_string_lossy().into_owned(), "mcp".into(), "--connect".into(), format!("127.0.0.1:{}", b.port)];
+                let argv = vec![
+                    b.cli.to_string_lossy().into_owned(),
+                    "mcp".into(),
+                    "--connect".into(),
+                    format!("127.0.0.1:{}", b.port),
+                    "--allow-any-path".into(),
+                ];
                 Some(AgentProcess::spawn(&argv, &ctx.cwd, &["SOLIDCRAFT_CONTROL_TOKEN"], || {})?)
             }
             None => None,

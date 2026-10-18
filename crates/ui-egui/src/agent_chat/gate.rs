@@ -202,22 +202,18 @@ pub fn describe(method: &str, params: &Value) -> String {
     }
 }
 
-/// The MCP server saves the pictures it hands back in its own scratch folder, inside its
-/// `allow_paths`; those need no question.
+/// The MCP server saves the pictures it hands back in its own scratch folder (a
+/// `solidcraft-mcp-*` folder, `solidcraft_mcp::scratch_dir`); those need no question. Judged from
+/// the path itself, because a server started with `--allow-any-path` sends no `allow_paths`.
 fn is_scratch(params: &Value) -> bool {
     let Some(path) = params.get("path").and_then(Value::as_str) else { return false };
     let path = std::path::Path::new(path);
     if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
         return false;
     }
-    let ok = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("png"));
-    ok && params.get("allow_paths").and_then(Value::as_array).is_some_and(|roots| {
-        roots
-            .iter()
-            .filter_map(Value::as_str)
-            .map(std::path::Path::new)
-            .any(|r| r.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("solidcraft-mcp-")) && path.starts_with(r))
-    })
+    let png = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("png"));
+    let in_scratch = path.parent().and_then(std::path::Path::file_name).and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("solidcraft-mcp-"));
+    png && in_scratch
 }
 
 #[cfg(test)]
@@ -326,6 +322,9 @@ mod tests {
     fn the_mcp_servers_own_pictures_need_no_question() {
         let scratch = json!({"path": "/tmp/solidcraft-mcp-41-a3/shot-1.png", "allow_paths": ["/tmp/solidcraft-mcp-41-a3"]});
         assert_eq!(request("ui.screenshot", &scratch, 0), Verdict::Run { change: false });
+        // A server started with `--allow-any-path` sends no `allow_paths`; its own folder still counts.
+        let bare = json!({"path": "/tmp/solidcraft-mcp-41-a3/shot-1.png"});
+        assert_eq!(request("ui.screenshot", &bare, 0), Verdict::Run { change: false });
         let elsewhere = json!({"path": "/home/u/Desktop/shot.png", "allow_paths": ["/tmp/solidcraft-mcp-41-a3", "/home/u/Desktop"]});
         assert!(matches!(request("ui.screenshot", &elsewhere, 0), Verdict::Ask(_)));
         assert_eq!(request("ui.render", &json!({"width": 400}), 0), Verdict::Run { change: false });

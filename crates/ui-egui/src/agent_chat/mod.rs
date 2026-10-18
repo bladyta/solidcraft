@@ -1114,7 +1114,7 @@ pub fn undo_changes(app: &mut SolveApp, index: usize) {
 fn pump_tools(app: &mut SolveApp) {
     let Some(rx) = app.agent_chat.tools_rx.take() else { return };
     let limit = app.preferences.agent_chat_turn_limit.clamp(1, 1000);
-    for mut req in rx.try_iter().take(64) {
+    for req in rx.try_iter().take(64) {
         let refuse = |req: ControlRequest, e: String| {
             let _ = req.reply.send(json!({"ok": false, "error": e}));
         };
@@ -1127,12 +1127,6 @@ fn pump_tools(app: &mut SolveApp) {
         if turn.requests > gate::MAX_REQUESTS_PER_TURN {
             refuse(req, format!("too many requests in one message (at most {})", gate::MAX_REQUESTS_PER_TURN));
             continue;
-        }
-        // Requests without folders of their own stay inside the chat's working folder.
-        if let Some(o) = req.params.as_object_mut()
-            && !o.contains_key("allow_paths")
-        {
-            o.insert("allow_paths".into(), json!([working_dir().to_string_lossy()]));
         }
         let undo_left = undo_len.saturating_sub(turn.start_undo);
         // The permission mode (the agent's own, else the global one) and "always allow" answers.

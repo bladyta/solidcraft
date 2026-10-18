@@ -170,8 +170,9 @@ conversation shows the merged step with an Undo button while it's still the late
 ACP lets the client offer a file system and a terminal; the chat offers neither, and starts the
 agent in an empty working folder of SolidCraft's own (`<data>/agent-chat/work`), not the
 design's folder. The Claude Code adapter has shell, file and web tools of its own anyway: the
-session asks it to turn them off (`_meta.claudeCode.options.disallowedTools`) and not to offer
-"bypass permissions". Other agents' own permission requests appear in the panel with their
+session asks it to turn off the shell, web and sub-agent tools (`_meta.claudeCode.options.disallowedTools`)
+and not to offer "bypass permissions". Its file tools stay on, so the agent can work with files
+anywhere on the computer, and its changes wait for the user in the panel. Other agents' own permission requests appear in the panel with their
 options.
 
 ### Processes
