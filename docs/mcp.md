@@ -90,11 +90,15 @@ solidcraft-cli mcp --allow-path ~/designs --allow-path ~/exports
 solidcraft-cli mcp --allow-any-path   # no limit (the behaviour before this option existed)
 ```
 
-Bridged, the server sends its folders with every request (`allow_paths`, see
+Bridged with folder limits, the server sends its folders with every request (`allow_paths`, see
 [control-protocol.md](control-protocol.md)) and the app adds its own recovery folder and the
-folder of the design open in it, under the same rules, so give absolute paths: a relative one
-resolves against the app's working folder, not the server's. The app's own
-file dialogs are never limited.
+folder of the design open in it, under the same rules. Give absolute paths either way: a relative
+one resolves against the app's working folder, not the server's. The app's own file dialogs are
+never limited.
+
+The desktop app's own chat panel bridges the server with `--allow-any-path`, so its agent reaches
+any file on the computer; nothing is sent as `allow_paths` and each save, open or export still
+waits for the user's Allow in the panel (see [agent-chat.md](agent-chat.md)).
 
 ### Tool annotations
 

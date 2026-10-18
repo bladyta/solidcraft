@@ -236,9 +236,9 @@ saves, opens or inserts. A sweep's or pattern's `path` (curve ids) and an occurr
 ## What it can't do
 
 - **Files wait for you** unless you chose **Allow everything**. **Cancel** or **Stop** declines
-  everything that's waiting, and a question nobody answers is declined after four minutes. The
-  [MCP server's folder limits](mcp.md) still apply after you allow: the design's folder, the
-  recovery folder and the server's own scratch folder.
+  everything that's waiting, and a question nobody answers is declined after four minutes. Once
+  you allow, the file is reached wherever it is: the panel's server runs with no
+  [folder limits](mcp.md) (`--allow-any-path`), so your answer in the chat is the only limit.
 - **A limit per message.** The agent may make 24 changes per message by default; you can set
   the number on the AI page. Reading the design doesn't count. When it reaches the limit, it's
   told to stop and report what's left; send another message to let it carry on.
@@ -246,9 +246,10 @@ saves, opens or inserts. A sweep's or pattern's `path` (curve ids) and an occurr
   paths.
 - **Not the rest of the app.** It can't click the interface, change settings, quit, or drive the
   chat itself.
-- **Its own tools stay off where we can turn them off.** SolidCraft declares no file system and
-  no terminal to the agent, runs it in an empty working folder of its own, and asks the Claude
-  Code adapter to turn off its shell, file and web tools for the session.
+- **Its own shell and web tools stay off.** SolidCraft declares no file system and no terminal to
+  the agent, runs it in an empty working folder of its own, and asks the Claude Code adapter to
+  turn off its shell, web and sub-agent tools for the session. Its file tools (read, write, edit,
+  search) stay on and reach any file on the computer; each change still waits for your Allow.
 
 When the panel's agent is stopped, another agent is picked, or SolidCraft quits, the agent and
 every program it started (the CLI it wraps, its MCP server) are stopped.

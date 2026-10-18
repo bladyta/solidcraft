@@ -47,7 +47,7 @@ pub fn initialize_params(version: &str) -> Value {
 /// The MCP server the agent starts to reach the design: `solidcraft-cli mcp --connect` bridged to
 /// this app's control port. The server finds the port's token in the token file the app wrote
 /// (docs/control-protocol.md), so the token never travels through the agent, and it keeps its
-/// default folder limits (docs/mcp.md): no `--allow-any-path`.
+/// no folder limits: `--allow-any-path`, so the agent can open and save files anywhere on this computer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct McpBridge {
     pub cli: std::path::PathBuf,
@@ -59,7 +59,7 @@ impl McpBridge {
         json!({
             "name": "solidcraft",
             "command": self.cli.to_string_lossy(),
-            "args": ["mcp", "--connect", format!("127.0.0.1:{}", self.port)],
+            "args": ["mcp", "--connect", format!("127.0.0.1:{}", self.port), "--allow-any-path"],
             "env": [],
         })
     }
@@ -70,13 +70,13 @@ pub const SYSTEM_NOTE: &str = "You are running inside SolidCraft, a parametric 3
 The open design is reachable through the `solidcraft` MCP server: use its tools (list_commands, batch, execute, inspect_design, \
 measure, screenshot, set_parameter, undo) to read and change the design the user is looking at, and verify with measure or \
 inspect_design. Prefer one `batch` over many small calls. Saving, opening or exporting files waits for the user's approval in \
-the chat, and each message allows a limited number of changes. Don't use shell or file tools: work through the SolidCraft tools. \
-Keep answers short.";
+the chat, and each message allows a limited number of changes. Files anywhere on the computer can be read and written with your own file tools; \
+don't use the shell or the web. Keep answers short.";
 
-/// The Claude Code adapter's own tools that reach the computer rather than the design: turned off
-/// for the session (`_meta.claudeCode.options.disallowedTools`), so it works through SolidCraft's.
-pub const CLAUDE_DISALLOWED_TOOLS: &[&str] =
-    &["Bash", "BashOutput", "KillShell", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep", "WebFetch", "WebSearch", "Task"];
+/// The Claude Code adapter's own tools turned off for the session (`_meta.claudeCode.options.disallowedTools`):
+/// shell, web and sub-agents. Its file tools (read, write, edit, search) stay on, so the agent can
+/// work with files anywhere on the computer; each change still waits for the user in the panel.
+pub const CLAUDE_DISALLOWED_TOOLS: &[&str] = &["Bash", "BashOutput", "KillShell", "WebFetch", "WebSearch", "Task"];
 
 pub fn session_new_params(cwd: &std::path::Path, bridge: Option<&McpBridge>) -> Value {
     let servers: Vec<Value> = bridge.map(McpBridge::to_json).into_iter().collect();
@@ -87,7 +87,7 @@ pub fn session_new_params(cwd: &std::path::Path, bridge: Option<&McpBridge>) -> 
             "systemPrompt": {"append": SYSTEM_NOTE},
             // Hosts may opt a session out of "bypass permissions" (the Claude adapter reads it):
             // every tool call the agent asks about reaches the panel.
-            // Its own shell and file tools are off: the agent works through SolidCraft's tools.
+            // Its own shell and web tools are off; its file tools are on (CLAUDE_DISALLOWED_TOOLS).
             "claudeCode": {"options": {"allowDangerouslySkipPermissions": false, "disallowedTools": CLAUDE_DISALLOWED_TOOLS}},
         },
     })
@@ -470,15 +470,17 @@ mod tests {
     }
 
     #[test]
-    fn the_session_gets_the_bridged_mcp_server_without_a_token_or_any_path() {
+    fn the_session_gets_the_bridged_mcp_server_without_a_token() {
         let b = McpBridge { cli: "/opt/solidcraft/solidcraft-cli".into(), port: 41234 };
         let p = session_new_params(std::path::Path::new("/home/u/designs"), Some(&b));
         let s = &p["mcpServers"][0];
         assert_eq!(s["name"], "solidcraft");
-        assert_eq!(s["args"], json!(["mcp", "--connect", "127.0.0.1:41234"]));
+        assert_eq!(s["args"], json!(["mcp", "--connect", "127.0.0.1:41234", "--allow-any-path"]));
         let text = p.to_string();
-        assert!(!text.contains("allow-any-path") && !text.contains("TOKEN") && !text.contains("token"), "{text}");
-        assert!(p["_meta"]["claudeCode"]["options"]["disallowedTools"].as_array().is_some_and(|t| t.iter().any(|x| x == "Bash")));
+        assert!(!text.contains("TOKEN") && !text.contains("token"), "{text}");
+        let off = p["_meta"]["claudeCode"]["options"]["disallowedTools"].as_array();
+        assert!(off.is_some_and(|t| t.iter().any(|x| x == "Bash")), "shell stays off");
+        assert!(off.is_some_and(|t| !t.iter().any(|x| x == "Read" || x == "Write" || x == "Edit")), "file tools are on");
         assert_eq!(session_new_params(std::path::Path::new("/tmp"), None)["mcpServers"], json!([]));
     }
 
