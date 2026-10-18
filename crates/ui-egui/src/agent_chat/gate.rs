@@ -203,8 +203,10 @@ pub fn describe(method: &str, params: &Value) -> String {
 }
 
 /// The MCP server saves the pictures it hands back in its own scratch folder (a
-/// `solidcraft-mcp-*` folder, `solidcraft_mcp::scratch_dir`); those need no question. Judged from
-/// the path itself, because a server started with `--allow-any-path` sends no `allow_paths`.
+/// `solidcraft-mcp-*` folder straight in the temporary folder, `solidcraft_mcp::scratch_dir`);
+/// those need no question. Judged from the path itself, because a server started with
+/// `--allow-any-path` sends no `allow_paths`. The folder's place is checked too, not just its
+/// name, so a folder named like the server's elsewhere on the disk still asks.
 fn is_scratch(params: &Value) -> bool {
     let Some(path) = params.get("path").and_then(Value::as_str) else { return false };
     let path = std::path::Path::new(path);
@@ -212,8 +214,10 @@ fn is_scratch(params: &Value) -> bool {
         return false;
     }
     let png = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("png"));
-    let in_scratch = path.parent().and_then(std::path::Path::file_name).and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("solidcraft-mcp-"));
-    png && in_scratch
+    let Some(dir) = path.parent() else { return false };
+    let named = dir.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("solidcraft-mcp-"));
+    let in_temp = dir.parent().is_some_and(|p| p == solidcraft_engine::io::vfs::temp_dir());
+    png && named && in_temp
 }
 
 #[cfg(test)]
@@ -320,12 +324,16 @@ mod tests {
 
     #[test]
     fn the_mcp_servers_own_pictures_need_no_question() {
-        let scratch = json!({"path": "/tmp/solidcraft-mcp-41-a3/shot-1.png", "allow_paths": ["/tmp/solidcraft-mcp-41-a3"]});
+        let temp = solidcraft_engine::io::vfs::temp_dir();
+        let shot = temp.join("solidcraft-mcp-41-a3").join("shot-1.png");
+        let scratch = json!({"path": &shot, "allow_paths": [temp.join("solidcraft-mcp-41-a3")]});
         assert_eq!(request("ui.screenshot", &scratch, 0), Verdict::Run { change: false });
         // A server started with `--allow-any-path` sends no `allow_paths`; its own folder still counts.
-        let bare = json!({"path": "/tmp/solidcraft-mcp-41-a3/shot-1.png"});
-        assert_eq!(request("ui.screenshot", &bare, 0), Verdict::Run { change: false });
-        let elsewhere = json!({"path": "/home/u/Desktop/shot.png", "allow_paths": ["/tmp/solidcraft-mcp-41-a3", "/home/u/Desktop"]});
+        assert_eq!(request("ui.screenshot", &json!({"path": &shot}), 0), Verdict::Run { change: false });
+        // A folder named like the server's, but somewhere else, asks all the same.
+        let faked = json!({"path": temp.join("sub").join("solidcraft-mcp-41-a3").join("shot-1.png")});
+        assert!(matches!(request("ui.screenshot", &faked, 0), Verdict::Ask(_)));
+        let elsewhere = json!({"path": "/home/u/Desktop/shot.png", "allow_paths": ["/home/u/Desktop"]});
         assert!(matches!(request("ui.screenshot", &elsewhere, 0), Verdict::Ask(_)));
         assert_eq!(request("ui.render", &json!({"width": 400}), 0), Verdict::Run { change: false });
     }
