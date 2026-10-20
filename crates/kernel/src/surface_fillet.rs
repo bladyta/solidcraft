@@ -540,9 +540,9 @@ fn covered_span(
 ) -> Result<(f64, f64)> {
     let n = 48;
     let mut inside = [false; 49];
-    for i in 0..=n {
+    for (i, slot) in inside.iter_mut().enumerate().take(n + 1) {
         let th = start + span * (i as f64) / (n as f64);
-        inside[i] = on_face(plane_loc, plane_contact(th), tol) && on_face(cyl_loc, cyl_contact(th), tol);
+        *slot = on_face(plane_loc, plane_contact(th), tol) && on_face(cyl_loc, cyl_contact(th), tol);
     }
     if inside.iter().all(|x| *x) {
         return Ok((start, span));
