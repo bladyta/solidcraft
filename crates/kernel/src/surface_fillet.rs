@@ -91,7 +91,8 @@ fn locate(body: &Body, p: Vec3) -> Result<Located> {
     let mesh = body.tessellate((body.size() * 2e-4).max(1e-3))?;
     let tol = on_tol(body);
     let face = nearest_on(&mesh, p, tol).ok_or_else(|| invalid("the point is not on a face"))?;
-    let surf = face_surface(body, face).ok_or_else(|| later("a rolling-ball fillet on a face that is not a plane, a cylinder, a cone, a sphere or a torus"))?;
+    let surf = face_surface(body, face)
+        .ok_or_else(|| later("a rolling-ball fillet on a face that is not a plane, a cylinder, a cone, a sphere or a torus"))?;
     if analytic_gap(&surf, p) > tol {
         return Err(invalid("the point is not on a face"));
     }
@@ -295,11 +296,7 @@ fn plane_plane(a: &Body, la: &Located, pa: Vec3, b: &Body, lb: &Located, pb: Vec
     // The cut runs through the contact. Its normal points from the planes' intersection, through
     // the contact, and on: that is the side the sheet keeps.
     let (i0, _) = spine_of(n1, p1, n2, p2, g, det, 0.0, 0.0, 0.0)?;
-    Ok(Fillet {
-        blend,
-        cut_a: Some(Cut { at: a0, normal: keep_dir(i0, a0, axis)? }),
-        cut_b: Some(Cut { at: b0, normal: keep_dir(i0, b0, axis)? }),
-    })
+    Ok(Fillet { blend, cut_a: Some(Cut { at: a0, normal: keep_dir(i0, a0, axis)? }), cut_b: Some(Cut { at: b0, normal: keep_dir(i0, b0, axis)? }) })
 }
 
 /// A point on the spine `c0` and a unit direction along it. `s1`/`s2` are ±1 (0 builds the
@@ -678,10 +675,7 @@ mod tests {
     fn sheet(plane: Plane, u0: f64, v0: f64, u1: f64, v1: f64) -> Body {
         let (a, b) = (u0.min(u1), u0.max(u1));
         let (c, d) = (v0.min(v1), v0.max(v1));
-        let r = Region2 {
-            outer: Loop2::polygon(&[Vec2::new(a, c), Vec2::new(b, c), Vec2::new(b, d), Vec2::new(a, d)]),
-            holes: vec![],
-        };
+        let r = Region2 { outer: Loop2::polygon(&[Vec2::new(a, c), Vec2::new(b, c), Vec2::new(b, d), Vec2::new(a, d)]), holes: vec![] };
         patch_region(&plane, &r).unwrap()
     }
     /// A cylindrical sheet: the line `p0`–`p1` revolved about `axis` through `origin` by `sweep`.
